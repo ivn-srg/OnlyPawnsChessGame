@@ -8,20 +8,17 @@
 import Cocoa
 import Foundation
 
-// NOTE: создание консольной игры шахматы пешками
-enum Side: String {
-    case white = "W"
-    case black = "B"
-    case nothing = " "
-}
 
 class Pawn {
     var isFirstMove: Bool = true
+    var pastPosition: String? = nil
     var currentPosition: String?
     var Side: Side
     
+    
     init (currentPosition: String, Side: Side) {
         self.Side = Side
+        
         self.currentPosition = currentPosition
     }
     
@@ -30,9 +27,25 @@ class Pawn {
     }
 }
 
+class ChessDesk {
+    
+    var lastMovingPawn: Pawn?
+    
+    init(lastMovingPawn: Pawn? = nil) {
+        self.lastMovingPawn = lastMovingPawn
+    }
+    
+}
+
+enum Side: String {
+    case white = "W"
+    case black = "B"
+    case nothing = " "
+}
+
 enum ResultsOfGame: String {
-    case userWins = "You are win! Congrates!"
-    case enemyWins = "You lose :( Try again!"
+    case userWins
+    case enemyWins
     case stalemate = "Stalemate! Good result, friend!"
     case continueGame = "Continue game"
 }
@@ -45,6 +58,16 @@ var dictStrToInt = ["a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6, "g": 7, "h":
 var blackPawnsArray: [Pawn] = []
 var whitePawnsArray: [Pawn] = []
 
+var currentTurnSide: String = Side.white.rawValue
+var inputMove: String?
+
+var numberOfWhitePawnsCut: Int {
+    whitePawnsArray.filter { $0.currentPosition != nil }.count
+}
+var numberOfBlackPawnsCut: Int {
+    return blackPawnsArray.filter { $0.currentPosition != nil }.count
+}
+
 var chessDesk = Array(repeating: Array(repeating: Side.nothing.rawValue, count: 8), count: 8)
 
 var patternInputMove: String = "[a-hA-H][1-8][a-hA-H][1-8]"
@@ -55,6 +78,10 @@ var firstPlayerName: String?
 var secondPlayerName: String?
 
 var gameHasBeenLaunched: Bool = false
+let currentDesk = ChessDesk()
+
+// флаг логики взятия на проходе
+var isCapturingOnAisle = false
 
 func initializeGame() {
     
@@ -87,7 +114,7 @@ func initializeGame() {
         gameHasBeenLaunched = true
     }
     
-    for element in whitePawnsArray + blackPawnsArray {
+    for element in blackPawnsArray + whitePawnsArray {
         if let currentPositionOfPawn = element.currentPosition {
             let raw = 8 - Int(currentPositionOfPawn.suffix(1))!
             let column = dictStrToInt[String(currentPositionOfPawn.prefix(1))]! - 1
@@ -150,7 +177,7 @@ func checkToRightMove(_ currentPosition: String, _ nextPosition: String, _ side:
     // проверка валидности следующей позиции
     func checkValidNextPosition () -> Bool {
 
-        let activePawn = findElement(in: whitePawnsArray + blackPawnsArray) { element in
+        let activePawn = findElement(in: blackPawnsArray + whitePawnsArray) { element in
             return element.currentPosition == currentPosition
         }
         
@@ -158,16 +185,17 @@ func checkToRightMove(_ currentPosition: String, _ nextPosition: String, _ side:
             let contentOfCellNextPositionOnDesk = chessDesk[8 - Int(nextPosition.suffix(1))!][dictStrToInt[String(nextPosition.prefix(1))]! - 1]
             // проверка на то, что следующая позиция на доске не занята своей же пешкой
             let pawnInNextPositionIsNotSame = contentOfCellNextPositionOnDesk != side
-            // проверка на то, что следующая позиция имеет тот же столбец
-            let nextPositionHasSameColumn = currentPosition.prefix(1) == nextPosition.prefix(1)
             // модуль разницы между номерами строк для задания дальности ходьбы пешек
-            let diffBetweenNextAndCurrentRaws = abs(Int(nextPosition.suffix(1))! - Int(currentPosition.suffix(1))!)
-            
+            let diffBetweenNextAndCurrentRaws = { (nextPos: String, currentPos: String) -> Int in
+                return abs(Int(nextPos.suffix(1))! - Int(currentPos.suffix(1))!)
+            }
             // модуль разницы между номерами столбцов для задания дальности ходьбы пешек
-            let diffBetweenNextAndCurrentColumns = abs(dictStrToInt[String(nextPosition.prefix(1))]! - dictStrToInt[String(currentPosition.prefix(1))]!)
+            let diffBetweenNextAndCurrentColumns = { (nextPos: String, currentPos: String) -> Int in
+                return abs(dictStrToInt[String(nextPos.prefix(1))]! - dictStrToInt[String(currentPos.prefix(1))]!)
+            }
             // проверка на то, что при ходьбе вперед на одну ячейку нет других пешек
             let notDiffPawnsInFrontOfCurrentPawn = {
-                if nextPositionHasSameColumn && diffBetweenNextAndCurrentRaws == 1 {
+                if diffBetweenNextAndCurrentColumns(nextPosition, currentPosition) == 0 && diffBetweenNextAndCurrentRaws(nextPosition, currentPosition) == 1 {
                     if activePawn.Side.rawValue == Side.white.rawValue {
                         return contentOfCellNextPositionOnDesk != Side.black.rawValue
                     } else {
@@ -177,7 +205,15 @@ func checkToRightMove(_ currentPosition: String, _ nextPosition: String, _ side:
             }
             
             let correctDiagonalMove = {
-                if diffBetweenNextAndCurrentColumns == 1 {
+                if diffBetweenNextAndCurrentColumns(nextPosition, currentPosition) == 1 {
+                    // обработка корректности взятия на проходе
+                    // если ячейка над/под следующей ячейкей является предыдущей позицией последней пешки и она прошла два хода, то это кейс взятия на проходе
+                    if "\(nextPosition.prefix(1))\(side == Side.white.rawValue ? Int(nextPosition.suffix(1))! + 1 : Int(nextPosition.suffix(1))! - 1)" == currentDesk.lastMovingPawn?.pastPosition && diffBetweenNextAndCurrentRaws(currentDesk.lastMovingPawn!.currentPosition!, currentDesk.lastMovingPawn!.pastPosition!
+                    ) == 2 {
+                        isCapturingOnAisle = true
+                        return true
+                    }
+                    // обработка корректности кейса сруба
                     if activePawn.Side.rawValue == Side.white.rawValue {
                         return contentOfCellNextPositionOnDesk == Side.black.rawValue
                     } else {
@@ -195,11 +231,11 @@ func checkToRightMove(_ currentPosition: String, _ nextPosition: String, _ side:
             }
             
             if activePawn.isFirstMove {
-                let conditional = nextPositionHasSameColumn && (diffBetweenNextAndCurrentRaws <= 2) && pawnInNextPositionIsNotSame && nextPositionIsNotBackStep() && notDiffPawnsInFrontOfCurrentPawn() && correctDiagonalMove()
+                let conditional = (diffBetweenNextAndCurrentColumns(nextPosition, currentPosition) == 0) && (diffBetweenNextAndCurrentRaws(nextPosition, currentPosition) <= 2) && pawnInNextPositionIsNotSame && nextPositionIsNotBackStep() && notDiffPawnsInFrontOfCurrentPawn() && correctDiagonalMove()
                 
                 return conditional ? true : false
             } else {
-                let conditional = (diffBetweenNextAndCurrentColumns <= 1) && (diffBetweenNextAndCurrentRaws == 1) && pawnInNextPositionIsNotSame && nextPositionIsNotBackStep() && notDiffPawnsInFrontOfCurrentPawn() && correctDiagonalMove()
+                let conditional = (diffBetweenNextAndCurrentColumns(nextPosition, currentPosition) <= 1) && (diffBetweenNextAndCurrentRaws(nextPosition, currentPosition) == 1) && pawnInNextPositionIsNotSame && nextPositionIsNotBackStep() && notDiffPawnsInFrontOfCurrentPawn() && correctDiagonalMove()
                 
                 return conditional ? true : false
             }
@@ -216,40 +252,40 @@ func checkToRightMove(_ currentPosition: String, _ nextPosition: String, _ side:
 
 func makeMove(_ currentPosition: String, _ nextPosition: String) {
     
-    for item in blackPawnsArray + whitePawnsArray {
-        if item.currentPosition == currentPosition {
-            let nextRaw = 8 - Int(nextPosition.suffix(1))!
-            let nextColumn = dictStrToInt[String(nextPosition.prefix(1))]! - 1
-            
-            if chessDesk[nextRaw][nextColumn] != Side.nothing.rawValue {
-                let activePawn = findElement(in: whitePawnsArray + blackPawnsArray) { element in
-                    return element.currentPosition == nextPosition
-                }
-                if let activePawn = activePawn {
-                    activePawn.currentPosition = nil
-                    print("\(currentTurnSide) has cut down the enemy's pawn in cell \(nextPosition)")
-                    activePawn.Side.rawValue == Side.black.rawValue ? print("Black pawns left: \(numberOfBlackPawnsCut)") : print("White pawns left: \(numberOfBlackPawnsCut)")
-                }
+    var currentMovingPawn: Pawn = findElement(in: blackPawnsArray + whitePawnsArray, matching: {$0.currentPosition == currentPosition})!
+    
+    let nextRaw = 8 - Int(nextPosition.suffix(1))!
+    let nextColumn = dictStrToInt[String(nextPosition.prefix(1))]! - 1
+    
+    let lastRaw = 8 - Int(currentPosition.suffix(1))!
+    let lastColumn = dictStrToInt[String(currentPosition.prefix(1))]! - 1
+    
+    // обработка кейса сруба пешки
+    if abs(nextColumn - lastColumn) == 1 {
+        let activePawn = findElement(in: blackPawnsArray + whitePawnsArray) { element in
+            return element.currentPosition == nextPosition
+        }
+        if let activePawn = activePawn {
+            activePawn.currentPosition = nil
+            print("\(currentTurnSide) has cut down the enemy's pawn in cell \(nextPosition)")
+            activePawn.Side.rawValue == Side.black.rawValue ? print("Black pawns left: \(numberOfBlackPawnsCut)") : print("White pawns left: \(numberOfBlackPawnsCut)")
+        } else if isCapturingOnAisle {
+            let felledPawn = findElement(in: blackPawnsArray + whitePawnsArray) { element in
+                return element.pastPosition == currentDesk.lastMovingPawn?.pastPosition
             }
-            chessDesk[nextRaw][nextColumn] = item.Side.rawValue
-            item.currentPosition = nextPosition
-            item.isFirstMove = false
-            
-            let lastRaw = 8 - Int(currentPosition.suffix(1))!
-            let lastColumn = dictStrToInt[String(currentPosition.prefix(1))]! - 1
-            chessDesk[lastRaw][lastColumn] = Side.nothing.rawValue
-        } else { continue }
+            felledPawn?.currentPosition = nil
+            isCapturingOnAisle = false
+        }
     }
-}
+        
+    chessDesk[nextRaw][nextColumn] = currentMovingPawn.Side.rawValue
+    currentMovingPawn.pastPosition = currentMovingPawn.currentPosition
+    currentMovingPawn.currentPosition = nextPosition
+    currentMovingPawn.isFirstMove = false
+    currentDesk.lastMovingPawn = currentMovingPawn
+            
 
-var currentTurnSide: String = Side.white.rawValue
-var inputMove: String?
-
-var numberOfWhitePawnsCut: Int {
-    whitePawnsArray.filter { $0.currentPosition != nil }.count
-}
-var numberOfBlackPawnsCut: Int {
-    return blackPawnsArray.filter { $0.currentPosition != nil }.count
+    chessDesk[lastRaw][lastColumn] = Side.nothing.rawValue
 }
 
 main: while true {
