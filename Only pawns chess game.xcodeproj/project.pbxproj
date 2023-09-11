@@ -24,7 +24,7 @@
 
 /* Begin PBXFileReference section */
 		93C59EAA2AA7183E00E01D7A /* Only pawns chess game */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "Only pawns chess game"; sourceTree = BUILT_PRODUCTS_DIR; };
-		93C59EAD2AA7183E00E01D7A /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		93C59EAD2AA7183E00E01D7A /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,7 +41,7 @@
 		93C59EA12AA7183D00E01D7A = {
 			isa = PBXGroup;
 			children = (
-				93C59EAC2AA7183E00E01D7A /* Only pawns chess game */,
+				93C59EAD2AA7183E00E01D7A /* main.swift */,
 				93C59EAB2AA7183E00E01D7A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -52,14 +52,6 @@
 				93C59EAA2AA7183E00E01D7A /* Only pawns chess game */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		93C59EAC2AA7183E00E01D7A /* Only pawns chess game */ = {
-			isa = PBXGroup;
-			children = (
-				93C59EAD2AA7183E00E01D7A /* main.swift */,
-			);
-			path = "Only pawns chess game";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

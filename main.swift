@@ -14,7 +14,7 @@ class Pawn {
     var pastPosition: String? = nil
     var currentPosition: String?
     var Side: Side
-    
+    var potensialNextPosition: String = " "
     
     init (currentPosition: String, Side: Side) {
         self.Side = Side
@@ -132,15 +132,33 @@ func initializeGame() {
 }
 
 func checkWinOrStalemate() -> String {
-    // TODO: сделать проверку на ничью
     
-    if currentTurnSide == Side.white.rawValue {
-        if (chessDesk.first!.contains("W")){
+    if numberOfBlackPawnsCut == numberOfWhitePawnsCut {
+        let whiteAvailablePawns =  whitePawnsArray.filter { $0.currentPosition != nil }
+        var numberOfBlockPawns = 0
+        for item in whiteAvailablePawns {
+            
+            var hasEnemyPawnsForCut: Bool {
+                if item.currentPosition!.prefix(1) == "a" || item.currentPosition!.prefix(1) == "h" {
+                    return item.currentPosition!.prefix(1) == "a" ? chessDesk[8 - Int(item.potensialNextPosition.suffix(1))!][dictStrToInt[String(item.potensialNextPosition.prefix(1))]!] == " " : chessDesk[8 - Int(item.potensialNextPosition.suffix(1))!][dictStrToInt[String(item.potensialNextPosition.prefix(1))]! - 2] == " "
+                } else {
+                    return chessDesk[8 - Int(item.potensialNextPosition.suffix(1))!][dictStrToInt[String(item.potensialNextPosition.prefix(1))]! - 2] == " " || chessDesk[8 - Int(item.potensialNextPosition.suffix(1))!][dictStrToInt[String(item.potensialNextPosition.prefix(1))]!] == " "
+                }
+            }
+            if !blackPawnsArray.filter( {$0.currentPosition == item.potensialNextPosition} ).isEmpty && !hasEnemyPawnsForCut {
+                numberOfBlockPawns += 1
+            }
+        }
+        stateOfGame = numberOfBlockPawns == numberOfBlackPawnsCut ? ResultsOfGame.stalemate : ResultsOfGame.continueGame
+    }
+    
+    if currentTurnSide == Side.white.rawValue || blackPawnsArray.filter({ $0.currentPosition != nil }).isEmpty {
+        if chessDesk.first!.contains("W") {
             stateOfGame = .userWins
             print("White pawns win")
         }
     } else {
-        if (chessDesk.last!.contains("B")){
+        if chessDesk.last!.contains("B") || whitePawnsArray.filter({ $0.currentPosition != nil }).isEmpty {
             stateOfGame = .enemyWins
             print("Black pawns win")
         }
@@ -163,20 +181,15 @@ func checkOnValidMove(_ inputMove: String) -> Bool {
 }
 
 func checkToRightMove(_ currentPosition: String, _ nextPosition: String, _ side: String) -> Bool {
-    // TODO: сделать проверку следующего хода на корректность хода, не занята ли ячейка, в ячейке для сруба располагается своя пешка
     
     // поверка валидности текущей позиции
     func checkExistPawn() -> Bool {
-        if side == Side.white.rawValue {
-            return whitePawnsArray.contains { $0.currentPosition == currentPosition }
-        } else {
-            return blackPawnsArray.contains { $0.currentPosition == currentPosition }
-        }
+        return side == Side.white.rawValue ? whitePawnsArray.contains { $0.currentPosition == currentPosition } : blackPawnsArray.contains { $0.currentPosition == currentPosition }
     }
-        
+    
     // проверка валидности следующей позиции
     func checkValidNextPosition () -> Bool {
-
+        
         let activePawn = findElement(in: blackPawnsArray + whitePawnsArray) { element in
             return element.currentPosition == currentPosition
         }
@@ -196,98 +209,97 @@ func checkToRightMove(_ currentPosition: String, _ nextPosition: String, _ side:
             // проверка на то, что при ходьбе вперед на одну ячейку нет других пешек
             let notDiffPawnsInFrontOfCurrentPawn = {
                 if diffBetweenNextAndCurrentColumns(nextPosition, currentPosition) == 0 && diffBetweenNextAndCurrentRaws(nextPosition, currentPosition) == 1 {
-                    if activePawn.Side.rawValue == Side.white.rawValue {
-                        return contentOfCellNextPositionOnDesk != Side.black.rawValue
-                    } else {
-                        return contentOfCellNextPositionOnDesk != Side.white.rawValue
-                    }
+                    
+                    return activePawn.Side.rawValue == Side.white.rawValue ? contentOfCellNextPositionOnDesk != Side.black.rawValue : contentOfCellNextPositionOnDesk != Side.white.rawValue
                 } else { return true }
             }
-            
-            let correctDiagonalMove = {
-                if diffBetweenNextAndCurrentColumns(nextPosition, currentPosition) == 1 {
-                    // обработка корректности взятия на проходе
-                    // если ячейка над/под следующей ячейкей является предыдущей позицией последней пешки и она прошла два хода, то это кейс взятия на проходе
-                    if "\(nextPosition.prefix(1))\(side == Side.white.rawValue ? Int(nextPosition.suffix(1))! + 1 : Int(nextPosition.suffix(1))! - 1)" == currentDesk.lastMovingPawn?.pastPosition && diffBetweenNextAndCurrentRaws(currentDesk.lastMovingPawn!.currentPosition!, currentDesk.lastMovingPawn!.pastPosition!
-                    ) == 2 {
-                        isCapturingOnAisle = true
-                        return true
-                    }
-                    // обработка корректности кейса сруба
-                    if activePawn.Side.rawValue == Side.white.rawValue {
-                        return contentOfCellNextPositionOnDesk == Side.black.rawValue
-                    } else {
-                        return contentOfCellNextPositionOnDesk == Side.white.rawValue
-                    }
-                } else { return true }
-            }
-            
-            let nextPositionIsNotBackStep = {
-                if activePawn.Side.rawValue == Side.white.rawValue {
-                    return Int(nextPosition.suffix(1))! - Int(currentPosition.suffix(1))! > 0 ? true : false
-                } else {
-                    return Int(nextPosition.suffix(1))! - Int(currentPosition.suffix(1))! < 0 ? true : false
+                
+                let correctDiagonalMove = {
+                    if diffBetweenNextAndCurrentColumns(nextPosition, currentPosition) == 1 {
+                        // обработка корректности взятия на проходе
+                        // если ячейка над/под следующей ячейкей является предыдущей позицией последней пешки и она прошла два хода, то это кейс взятия на проходе
+                        if "\(nextPosition.prefix(1))\(side == Side.white.rawValue ? Int(nextPosition.suffix(1))! + 1 : Int(nextPosition.suffix(1))! - 1)" == currentDesk.lastMovingPawn?.pastPosition && diffBetweenNextAndCurrentRaws(currentDesk.lastMovingPawn!.currentPosition!, currentDesk.lastMovingPawn!.pastPosition!
+                        ) == 2 {
+                            isCapturingOnAisle = true
+                            return true
+                        }
+                        // обработка корректности кейса сруба
+                        if activePawn.Side.rawValue == Side.white.rawValue {
+                            return contentOfCellNextPositionOnDesk == Side.black.rawValue
+                        } else {
+                            return contentOfCellNextPositionOnDesk == Side.white.rawValue
+                        }
+                    } else { return true }
                 }
+                
+                let nextPositionIsNotBackStep = {
+                    if activePawn.Side.rawValue == Side.white.rawValue {
+                        return Int(nextPosition.suffix(1))! - Int(currentPosition.suffix(1))! > 0 ? true : false
+                    } else {
+                        return Int(nextPosition.suffix(1))! - Int(currentPosition.suffix(1))! < 0 ? true : false
+                    }
+                }
+                
+                if activePawn.isFirstMove {
+                    let conditional = (diffBetweenNextAndCurrentColumns(nextPosition, currentPosition) == 0) && (diffBetweenNextAndCurrentRaws(nextPosition, currentPosition) <= 2) && pawnInNextPositionIsNotSame && nextPositionIsNotBackStep() && notDiffPawnsInFrontOfCurrentPawn() && correctDiagonalMove()
+                    
+                    return conditional ? true : false
+                } else {
+                    let conditional = (diffBetweenNextAndCurrentColumns(nextPosition, currentPosition) <= 1) && (diffBetweenNextAndCurrentRaws(nextPosition, currentPosition) == 1) && pawnInNextPositionIsNotSame && nextPositionIsNotBackStep() && notDiffPawnsInFrontOfCurrentPawn() && correctDiagonalMove()
+                    
+                    return conditional ? true : false
+                }
+                
             }
             
-            if activePawn.isFirstMove {
-                let conditional = (diffBetweenNextAndCurrentColumns(nextPosition, currentPosition) == 0) && (diffBetweenNextAndCurrentRaws(nextPosition, currentPosition) <= 2) && pawnInNextPositionIsNotSame && nextPositionIsNotBackStep() && notDiffPawnsInFrontOfCurrentPawn() && correctDiagonalMove()
-                
-                return conditional ? true : false
-            } else {
-                let conditional = (diffBetweenNextAndCurrentColumns(nextPosition, currentPosition) <= 1) && (diffBetweenNextAndCurrentRaws(nextPosition, currentPosition) == 1) && pawnInNextPositionIsNotSame && nextPositionIsNotBackStep() && notDiffPawnsInFrontOfCurrentPawn() && correctDiagonalMove()
-                
-                return conditional ? true : false
-            }
-            
-        } else {
-            print("There aren't such pawns")
+            return true
         }
         
-        return true
+        return checkExistPawn() && checkValidNextPosition() ? true : false
     }
     
-    return checkExistPawn() && checkValidNextPosition() ? true : false
-}
-
-func makeMove(_ currentPosition: String, _ nextPosition: String) {
-    
-    var currentMovingPawn: Pawn = findElement(in: blackPawnsArray + whitePawnsArray, matching: {$0.currentPosition == currentPosition})!
-    
-    let nextRaw = 8 - Int(nextPosition.suffix(1))!
-    let nextColumn = dictStrToInt[String(nextPosition.prefix(1))]! - 1
-    
-    let lastRaw = 8 - Int(currentPosition.suffix(1))!
-    let lastColumn = dictStrToInt[String(currentPosition.prefix(1))]! - 1
-    
-    // обработка кейса сруба пешки
-    if abs(nextColumn - lastColumn) == 1 {
-        let activePawn = findElement(in: blackPawnsArray + whitePawnsArray) { element in
-            return element.currentPosition == nextPosition
-        }
-        if let activePawn = activePawn {
-            activePawn.currentPosition = nil
-            print("\(currentTurnSide) has cut down the enemy's pawn in cell \(nextPosition)")
-            activePawn.Side.rawValue == Side.black.rawValue ? print("Black pawns left: \(numberOfBlackPawnsCut)") : print("White pawns left: \(numberOfBlackPawnsCut)")
-        } else if isCapturingOnAisle {
-            let felledPawn = findElement(in: blackPawnsArray + whitePawnsArray) { element in
-                return element.pastPosition == currentDesk.lastMovingPawn?.pastPosition
-            }
-            felledPawn?.currentPosition = nil
-            isCapturingOnAisle = false
-        }
-    }
+    func makeMove(_ currentPosition: String, _ nextPosition: String) {
         
-    chessDesk[nextRaw][nextColumn] = currentMovingPawn.Side.rawValue
-    currentMovingPawn.pastPosition = currentMovingPawn.currentPosition
-    currentMovingPawn.currentPosition = nextPosition
-    currentMovingPawn.isFirstMove = false
-    currentDesk.lastMovingPawn = currentMovingPawn
-            
-
-    chessDesk[lastRaw][lastColumn] = Side.nothing.rawValue
-}
-
+        let currentMovingPawn: Pawn = findElement(in: blackPawnsArray + whitePawnsArray, matching: {$0.currentPosition == currentPosition})!
+        
+        let nextRaw = 8 - Int(nextPosition.suffix(1))!
+        let nextColumn = dictStrToInt[String(nextPosition.prefix(1))]! - 1
+        
+        let lastRaw = 8 - Int(currentPosition.suffix(1))!
+        let lastColumn = dictStrToInt[String(currentPosition.prefix(1))]! - 1
+        
+        // обработка кейса сруба пешки
+        if abs(nextColumn - lastColumn) == 1 {
+            let activePawn = findElement(in: blackPawnsArray + whitePawnsArray) { element in
+                return element.currentPosition == nextPosition
+            }
+            if let activePawn = activePawn {
+                activePawn.currentPosition = nil
+                print("\(currentTurnSide) has cut down the enemy's pawn in cell \(nextPosition)")
+                activePawn.Side.rawValue == Side.black.rawValue ? print("Black pawns left: \(numberOfBlackPawnsCut)") : print("White pawns left: \(numberOfBlackPawnsCut)")
+            } else if isCapturingOnAisle {
+                let felledPawn = findElement(in: blackPawnsArray + whitePawnsArray) { element in
+                    return element.pastPosition == currentDesk.lastMovingPawn?.pastPosition
+                }
+                chessDesk[8 - Int(felledPawn!.currentPosition!.suffix(1))!][dictStrToInt[String(felledPawn!.currentPosition!.prefix(1))]! - 1] = Side.nothing.rawValue
+                felledPawn?.currentPosition = nil
+                print("\(currentTurnSide) has cut down the enemy's pawn in cell \(nextPosition)")
+                isCapturingOnAisle = false
+            }
+        }
+        
+        chessDesk[nextRaw][nextColumn] = currentMovingPawn.Side.rawValue
+        currentMovingPawn.pastPosition = currentMovingPawn.currentPosition
+        currentMovingPawn.currentPosition = nextPosition
+        let potensialNextRaw = currentMovingPawn.Side == .white ? 9 - Int(nextPosition.suffix(1))! : 7 - Int(nextPosition.suffix(1))!
+        currentMovingPawn.potensialNextPosition = "\(String(nextPosition.prefix(1)))\(potensialNextRaw)"
+        currentMovingPawn.isFirstMove = false
+        currentDesk.lastMovingPawn = currentMovingPawn
+        
+        
+        chessDesk[lastRaw][lastColumn] = Side.nothing.rawValue
+    }
+    
 main: while true {
     
     initializeGame()
